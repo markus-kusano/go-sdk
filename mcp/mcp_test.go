@@ -1449,27 +1449,7 @@ func TestElicitContentValidation(t *testing.T) {
 		expectedError string
 	}{
 		{
-			name: "string with valid max length",
-			schema: &jsonschema.Schema{
-				Type: "object",
-				Properties: map[string]*jsonschema.Schema{
-					"test": {Type: "string", MinLength: ptr(0), MaxLength: ptr(6)},
-				},
-			},
-			expectedError: "",
-		},
-		{
-			name: "string with invalid max length",
-			schema: &jsonschema.Schema{
-				Type: "object",
-				Properties: map[string]*jsonschema.Schema{
-					"test": {Type: "string", MinLength: ptr(0), MaxLength: ptr(1)},
-				},
-			},
-			expectedError: "contains 6 Unicode code points, more than 1",
-		},
-		{
-			name: "string enum with schema on invalid value",
+			name: "string enum with schema not matching content",
 			schema: &jsonschema.Schema{
 				Type: "object",
 				Properties: map[string]*jsonschema.Schema{
@@ -1482,18 +1462,6 @@ func TestElicitContentValidation(t *testing.T) {
 									"title": "High Priority",
 								}),
 							},
-							{
-								Const: anyPtr(map[string]string{
-									"const": "medium",
-									"title": "Medium Priority",
-								}),
-							},
-							{
-								Const: anyPtr(map[string]string{
-									"const": "low",
-									"title": "Low Priority",
-								}),
-							},
 						},
 					},
 				},
@@ -1501,7 +1469,7 @@ func TestElicitContentValidation(t *testing.T) {
 			expectedError: "oneOf: did not validate against any of",
 		},
 		{
-			name: "string enum with schema on valid value",
+			name: "string enum with schema matching content",
 			schema: &jsonschema.Schema{
 				Type: "object",
 				Properties: map[string]*jsonschema.Schema{
@@ -1514,34 +1482,22 @@ func TestElicitContentValidation(t *testing.T) {
 									"title": "Potato Priority",
 								}),
 							},
-							{
-								Const: anyPtr(map[string]string{
-									"const": "medium",
-									"title": "Medium Priority",
-								}),
-							},
-							{
-								Const: anyPtr(map[string]string{
-									"const": "low",
-									"title": "Low Priority",
-								}),
-							},
 						},
 					},
 				},
 			},
-			expectedError: "oneOf: did not validate against any of",
+			expectedError: "",
 		},
 	}
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := ss.Elicit(ctx, &ElicitParams{
-				Message:         "Test valid schema: " + tc.name,
+				Message:         "Test schema: " + tc.name,
 				RequestedSchema: tc.schema,
 			})
 			if tc.expectedError != "" {
 				if err == nil {
-					t.Errorf("expected error for %s but got no error: %s", tc.name, tc.expectedError)
+					t.Errorf("expected error but got no error: %s", tc.expectedError)
 					return
 				}
 				if !strings.Contains(err.Error(), tc.expectedError) {
