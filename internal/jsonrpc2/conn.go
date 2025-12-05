@@ -58,6 +58,7 @@ type ConnectionOptions struct {
 // calls.
 // Connection is bidirectional; it does not have a designated server or client
 // end.
+// TODO(rfindley): how does this Connection differ from transport.go/Connection?
 type Connection struct {
 	seq int64 // must only be accessed using atomic operations
 

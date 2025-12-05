@@ -610,6 +610,7 @@ type stream struct {
 	// streamRequests is the set of unanswered incoming requests for the stream.
 	//
 	// Requests are removed when their response has been received.
+	// TODO(rfindley): explain why there are more requests per-stream, is it batching?
 	requests map[jsonrpc.ID]struct{}
 }
 
@@ -625,6 +626,7 @@ func (s *stream) close(reconnectAfter time.Duration) {
 //
 // s.mu must be held while calling this function.
 func (s *stream) doneLocked() bool {
+	// TODO(rfindley): Is the total number of requests always decreasing?
 	return len(s.requests) == 0 && s.id != ""
 }
 
@@ -877,6 +879,8 @@ func (c *streamableServerConn) acquireStream(ctx context.Context, w http.Respons
 		}
 		return c.writeEvent(w, s.id, Event{Name: "message", Data: data}, lastIdx)
 	}
+	// TODO(rfindley): why is this function identical to the one defined on
+	// ~L1082, can we move it to a free funciton?
 	s.closeLocked = func(reconnectAfter time.Duration) {
 		select {
 		case <-done:
@@ -950,12 +954,14 @@ func (c *streamableServerConn) servePOST(w http.ResponseWriter, req *http.Reques
 			if jreq.Method == methodInitialize {
 				isInitialize = true
 			}
+			// TODO:(rfindley): what is a jreq that is not a call? a notification?
 			jreq.Extra = &RequestExtra{
 				TokenInfo: tokenInfo,
 				Header:    req.Header,
 			}
 			if jreq.IsCall() {
 				calls[jreq.ID] = struct{}{}
+				// TODO(rfindley): what is this magic below?
 				jreq.Extra.(*RequestExtra).CloseStream = func(reconnectAfter time.Duration) {
 					c.mu.Lock()
 					streamID, ok := c.requestStreams[jreq.ID]
@@ -973,6 +979,7 @@ func (c *streamableServerConn) servePOST(w http.ResponseWriter, req *http.Reques
 		}
 	}
 
+	// TODO(rfindley): clarify what publish means? is it `c.incoming`?
 	// If we don't have any calls, we can just publish the incoming messages and return.
 	// No need to track a logical stream.
 	if len(calls) == 0 {
@@ -1025,6 +1032,8 @@ func (c *streamableServerConn) servePOST(w http.ResponseWriter, req *http.Reques
 			// In recent protocol versions, there should only be one message as
 			// batching is disabled, as checked above.
 			msgs = append(msgs, data)
+			// TODO(rfindley): for non-batch cases is the delivery always
+			// `final == true`?
 			if !final {
 				return nil
 			}
@@ -1049,6 +1058,7 @@ func (c *streamableServerConn) servePOST(w http.ResponseWriter, req *http.Reques
 		// Write events in the order we receive them.
 		lastIndex := -1
 		if c.eventStore != nil {
+			// TODO(rindley): define priming event or link to the spec.
 			// Write a priming event.
 			// We must also write it to the event store in order for indexes to
 			// align.
@@ -1071,6 +1081,8 @@ func (c *streamableServerConn) servePOST(w http.ResponseWriter, req *http.Reques
 			}
 			return c.writeEvent(w, stream.id, Event{Name: "message", Data: data}, &lastIndex)
 		}
+		// TODO(rfindley): why is this function identical to the one defined on
+		// ~L882, can we move it to a free funciton?
 		stream.closeLocked = func(reconnectAfter time.Duration) {
 			select {
 			case <-done:
@@ -1108,6 +1120,9 @@ func (c *streamableServerConn) servePOST(w http.ResponseWriter, req *http.Reques
 	for _, msg := range incoming {
 		select {
 		case c.incoming <- msg:
+		// TODO(rfindley): explain when `req.Context().Done()` is used vs
+		// `c.done`.
+		//
 		// Note: don't select on req.Context().Done() here, since we've already
 		// received the requests and may have already published a response message
 		// or notification. The client could resume the stream.
@@ -1118,6 +1133,9 @@ func (c *streamableServerConn) servePOST(w http.ResponseWriter, req *http.Reques
 		}
 	}
 
+	// TODO(rfindley): explain how the different `Done`s are connected, and
+	// where they are used. We had some trouble tracing down the references via
+	// gopls (on `c.done`)
 	select {
 	case <-req.Context().Done():
 		// request cancelled
