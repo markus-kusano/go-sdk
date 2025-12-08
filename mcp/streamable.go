@@ -851,6 +851,8 @@ func (c *streamableServerConn) acquireStream(ctx context.Context, w http.Respons
 		}
 	}
 
+	// TODO(rfindley): why do we collect into `toReplay` vs fusing this loop
+	// with the previous one
 	for _, data := range toReplay {
 		if err := c.writeEvent(w, s.id, Event{Name: "message", Data: data}, lastIdx); err != nil {
 			return nil, nil
@@ -916,6 +918,8 @@ func (c *streamableServerConn) servePOST(w http.ResponseWriter, req *http.Reques
 		http.Error(w, "POST requires a non-empty body", http.StatusBadRequest)
 		return
 	}
+	// TODO(starter bug): consider removing pinning batch part of the code in a
+	// later commit so we can simplify the logic here
 	incoming, isBatch, err := readBatch(body)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("malformed payload: %v", err), http.StatusBadRequest)
@@ -961,7 +965,9 @@ func (c *streamableServerConn) servePOST(w http.ResponseWriter, req *http.Reques
 			}
 			if jreq.IsCall() {
 				calls[jreq.ID] = struct{}{}
-				// TODO(rfindley): what is this magic below?
+				// TODO(rfindley): what is this magic below? Why do users need
+				// to set the CloseStream function (why is it public)?
+				// Also, why is it OK for ClostSteam to not be set in the `!jrew.IsCall()` branch?
 				jreq.Extra.(*RequestExtra).CloseStream = func(reconnectAfter time.Duration) {
 					c.mu.Lock()
 					streamID, ok := c.requestStreams[jreq.ID]
@@ -980,6 +986,7 @@ func (c *streamableServerConn) servePOST(w http.ResponseWriter, req *http.Reques
 	}
 
 	// TODO(rfindley): clarify what publish means? is it `c.incoming`?
+	//
 	// If we don't have any calls, we can just publish the incoming messages and return.
 	// No need to track a logical stream.
 	if len(calls) == 0 {
@@ -1059,6 +1066,7 @@ func (c *streamableServerConn) servePOST(w http.ResponseWriter, req *http.Reques
 		lastIndex := -1
 		if c.eventStore != nil {
 			// TODO(rindley): define priming event or link to the spec.
+			//
 			// Write a priming event.
 			// We must also write it to the event store in order for indexes to
 			// align.
@@ -1076,6 +1084,9 @@ func (c *streamableServerConn) servePOST(w http.ResponseWriter, req *http.Reques
 				return fmt.Errorf("stream closed")
 			default:
 			}
+			// TODO(rfindley): the definition of deliver on line 870 has a err
+			// := ctx.Err(); check (checking if the channel is done), we don't
+			// have one here
 			if final {
 				defer close(done)
 			}
@@ -1702,6 +1713,9 @@ func (c *streamableClientConn) handleSSE(requestSummary string, resp *http.Respo
 		}
 		// If the stream has ended, then do not reconnect if the stream is
 		// temporary (POST initiated SSE).
+		//
+		// TODO(rfindley): does persistent mean we're running standalone? if
+		// so, should we rename persistent to standalone?
 		if lastEventID == "" && !persistent {
 			return
 		}
@@ -1779,6 +1793,9 @@ func (c *streamableClientConn) processStream(requestSummary string, resp *http.R
 
 		select {
 		case c.incoming <- msg:
+			// TODO(rfindley): is forCall != nil mean that we're in the
+			// standalone/persistent stream?
+			// What other types of messages are coming over `c.incoming`?
 			if jsonResp, ok := msg.(*jsonrpc.Response); ok && forCall != nil {
 				// TODO: we should never get a response when forReq is nil (the standalone SSE request).
 				// We should detect this case.

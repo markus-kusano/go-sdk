@@ -475,6 +475,7 @@ type RequestExtra struct {
 	// If reconnectAfter is nonzero, it signals to the client to reconnect after
 	// the given duration. Otherwise, clients may determine their own
 	// reconnection policy.
+	// TODO(rfindley): why is this exported?
 	CloseStream func(reconnectAfter time.Duration)
 }
 
