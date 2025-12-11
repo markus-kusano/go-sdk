@@ -513,12 +513,11 @@ func (s *Server) changeAndNotify(notification string, change func() bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if change() {
-		// Stop the outstanding delayed call, if any.
 		if t := s.pendingNotifications[notification]; t != nil {
-			t.Stop()
+			t.Reset()
+		} else {
+			s.pendingNotifications[notification] = time.AfterFunc(notificationDelay, func() { s.notifySessions(notification) })
 		}
-		//
-		s.pendingNotifications[notification] = time.AfterFunc(notificationDelay, func() { s.notifySessions(notification) })
 	}
 }
 
